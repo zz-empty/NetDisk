@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-#include <stdio.h>
-#include <stdlib.h>
-=======
 // server/src/main.c
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,7 +10,6 @@ void handle_signup(int sig) {
     (void)sig;
     reload_config_flag = 1;
 }
->>>>>>> feature/config-module
 
 int main(int argc, char **argv) {
     printf("NetDisk Server Starting...\n");
@@ -24,10 +19,8 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-<<<<<<< HEAD
     // 后续添加配置，网络初始化等
     printf("config file: %s\n", argv[1]);
-=======
     // 设置信号处理（热重载）
     signal(SIGHUP, handle_signup);
 
@@ -67,6 +60,5 @@ int main(int argc, char **argv) {
         sleep(1);
     }
 
->>>>>>> feature/config-module
     return 0;
 }
