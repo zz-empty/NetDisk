@@ -10,11 +10,15 @@ typedef struct {
     int port;
     int thread_num;
     char file_dir[MAX_FILE_PATH];
+    int max_connections;
+    int timeout;
 } ServerConfig;
 
 // 函数声明
 int load_config(const char *config_file, ServerConfig *config);
 void print_config(const ServerConfig *config);
 int validate_config(const ServerConfig *config);
+const char *get_config_error(void);
+int reload_config(const char *config_file, ServerConfig *config);
 
 #endif  // CONFIG_H
