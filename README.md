@@ -96,12 +96,39 @@ THREAD_NUM = 10
 FILE_DIR = ./server_files
 ```
 
+<<<<<<< HEAD
 ## 开发规范
 
 ### Git工作流
 - 使用英文提交信息前缀（feat, fix, docs, style, refactor, test, chore）
 - 功能开发在分支进行，测试通过后合并到main分支
 - 每完成一期功能发布一个版本标签
+=======
+## 开发流程
+
+### Git分支策略
+- `main`分支：稳定版本，只接受合并请求
+- `dev`分支：开发集成分支，功能测试通过后合并到此
+- `feature/*`分支：功能开发分支，从dev分支创建
+
+### 提交规范
+使用约定式提交格式：
+- `feat:` 新功能
+- `fix:` 修复bug  
+- `docs:` 文档更新
+- `style:` 代码格式调整
+- `refactor:` 代码重构
+- `test:` 测试相关
+- `chore:` 构建过程或辅助工具变动
+
+### 开发步骤
+1. 从dev分支创建功能分支：`git checkout -b feature/模块名称`
+2. 开发完成后提交：`git commit -m 'feat: 描述功能'`
+3. 推送到远程：`git push origin feature/模块名称`
+4. 创建Pull Request到dev分支
+5. 代码审查后合并
+
+>>>>>>> feature/config-module
 
 ### 代码规范
 - 采用增量开发方式，写一部分测一部分
@@ -138,3 +165,7 @@ FILE_DIR = ./server_files
 ---
 
 *此README将根据项目进展持续更新。当前内容基于一期开发初期的状态。*
+<<<<<<< HEAD
+=======
+
+>>>>>>> feature/config-module
