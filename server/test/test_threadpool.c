@@ -152,9 +152,9 @@ int main() {
     printf("Starting Thread Pool Tests...\n\n");
     srand(time(NULL));
 
-    /* test_basic_functionary(); */
-    /* test_stress(); */
-    /* test_queue_full(); */
+    test_basic_functionary();
+    test_stress();
+    test_queue_full();
     test_error_handling();
 
     printf("All thread pool tests completed successfully!\n");

@@ -72,18 +72,25 @@ static void *threadpool_worker(void *arg) {
         // 加锁拿任务
         pthread_mutex_lock(&pool->lock);
         
-        // 无任务等待
-        if (pool->queue_size == 0 && !pool->shutdown) {
+        // 用while唤醒，防止伪唤醒
+        while (pool->queue_size == 0 && !pool->shutdown) {
             pthread_cond_wait(&pool->notify, &pool->lock);
         }
 
         // 是否退出
         if (pool->shutdown) {
+            pool->started--;
+            pthread_mutex_unlock(&pool->lock);
             break;
         }
 
         // 取出一个任务
         task = pool->task_queue_head;
+        if (!task) {
+            pthread_mutex_unlock(&pool->lock);
+            continue;
+        }
+
         pool->task_queue_head = pool->task_queue_head->next;
         pool->queue_size--;
 
@@ -100,8 +107,6 @@ static void *threadpool_worker(void *arg) {
         }
     }
 
-    pool->started--;
-    pthread_mutex_unlock(&pool->lock);
     pthread_exit(NULL);
     return NULL;
 }

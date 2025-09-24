@@ -8,7 +8,7 @@ file(GLOB SERVER_SOURCES "src/*.c")
 file(GLOB TEST_SOURCES "test/*.c")
 
 # 添加主服务器可执行文件
-add_executable(NetDiskServer src/main.c src/config.c)
+add_executable(NetDiskServer ${SERVER_SOURCES})
 target_link_libraries(NetDiskServer pthread)  # 添加链接库
 
 # 添加线程池测试可执行文件

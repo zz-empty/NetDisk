@@ -1,63 +1,90 @@
 // server/src/main.c
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
 #include <unistd.h>
+#include <signal.h>
+#include <time.h>
 #include "../include/config.h"
+#include "../include/threadpool.h"
 
-volatile sig_atomic_t reload_config_flag = 0;
-void handle_signup(int sig) {
-    (void)sig;
-    reload_config_flag = 1;
+// 全局变量
+static server_config_t *g_config = NULL;
+static threadpool_t *g_thread_pool = NULL;
+
+// 信号处理
+void signal_handler(int sig) {
+    printf("\nReceive signal %d, shutting down...\n", sig);
+
+    if (g_thread_pool) {
+        threadpool_destroy(g_thread_pool, 1);   // 优雅关闭
+    }
+
+    if (g_config) {
+        config_destroy(g_config);
+    }
+
+    exit(0);
+}
+
+// 示例函数
+void sample_task(void *arg) {
+    int task_id = *(int*)arg;
+    printf("Processing task %d in thread pool\n", task_id);
+    free(arg);
 }
 
 int main(int argc, char **argv) {
-    printf("NetDisk Server Starting...\n");
-
     if (2 != argc) {
         fprintf(stderr, "Usage: %s <config_file_path>\n", argv[0]);
         exit(1);
     }
 
-    // 后续添加配置，网络初始化等
-    printf("config file: %s\n", argv[1]);
-    // 设置信号处理（热重载）
-    signal(SIGHUP, handle_signup);
+    // 设置信号处理
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+    printf("NetDisk Server Starting...\n");
+
 
     // 加载配置信息
-    ServerConfig config;
-    if (load_config(argv[1], &config) != 0) {
-        fprintf(stderr, "Failed to load configuration: %s\n", get_config_error());
-        exit(1);
-    }
+    const char *config_file = argc > 1 ? argv[1] : "server.conf";
+    config_error_t config_result = config_load_from_file(config_file, &g_config);
 
-    if (validate_config(&config) != 0) {
-        fprintf(stderr, "Configuration validation failed: %s\n", get_config_error());
-        exit(1);
+    if (config_result != CONFIG_SUCCESS) {
+        fprintf(stderr, "Failed to load configuration: %s\n", config_get_error_string(config_result));
+        return 1;
     }
 
     // 显示配置信息
-    print_config(&config);
+    config_print(g_config);
 
-    printf("Server Configuration loaded successfully!\n");
-    printf("Server is running... Press Ctrl+C to stop\n");
+    // 创建线程池
+    g_thread_pool = threadpool_create(config_get_thread_pool_size(g_config), config_get_max_connections(g_config));  // 队列大小
+    if (!g_thread_pool) {
+        fprintf(stderr, "Failed to create thread pool\n");
+        config_destroy(g_config);
+        return 1;
+    }
 
-    // 主循环（简化版，后续添加网络初始化模块
-    while (1) {
-        // 检查是否需要热重载
-        if (reload_config_flag) {
-            printf("Receive SIGHUP, reloading configuration...\n");
-            if (reload_config(argv[1], &config) != 0) {
-                fprintf(stderr, "Failed to load configuration: %s\n", get_config_error());
-            } else {
-                printf("Configuration reloaded successfully!\n");
-                print_config(&config);
-            }
-            reload_config_flag = 0;
+    printf("Thread pool created with %d threads\n", config_get_thread_pool_size(g_config));
+
+
+    // 示例：添加一些任务到线程池
+    for (int i = 0; i < 5; i++) {
+        int *task_id = (int*)malloc(sizeof(int));
+        *task_id = i;
+
+        if (threadpool_add(g_thread_pool, sample_task, task_id) != THREADPOOL_SUCCESS) {
+            free(task_id);
+            fprintf(stderr, "Failed to add task %d to thread pool\n", i);
         }
+    }
 
-        // 后期改成select/epoll
-        sleep(1);
+    printf("Server is running. Press Ctrl+C to stop.\n");
+
+    // 主循环（简化版）
+    while (1) {
+        /* sleep(1); */
+        // 即将添加网络监听模块
     }
 
     return 0;
