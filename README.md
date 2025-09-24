@@ -96,14 +96,7 @@ THREAD_NUM = 10
 FILE_DIR = ./server_files
 ```
 
-<<<<<<< HEAD
-## 开发规范
 
-### Git工作流
-- 使用英文提交信息前缀（feat, fix, docs, style, refactor, test, chore）
-- 功能开发在分支进行，测试通过后合并到main分支
-- 每完成一期功能发布一个版本标签
-=======
 ## 开发流程
 
 ### Git分支策略
@@ -128,7 +121,7 @@ FILE_DIR = ./server_files
 4. 创建Pull Request到dev分支
 5. 代码审查后合并
 
->>>>>>> feature/config-module
+
 
 ### 代码规范
 - 采用增量开发方式，写一部分测一部分
@@ -165,7 +158,4 @@ FILE_DIR = ./server_files
 ---
 
 *此README将根据项目进展持续更新。当前内容基于一期开发初期的状态。*
-<<<<<<< HEAD
-=======
 
->>>>>>> feature/config-module
