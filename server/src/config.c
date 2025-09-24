@@ -6,9 +6,29 @@
 #include <errno.h>
 #include "../include/config.h"
 
-static char config_error[2056];
-const char *get_config_error(void) {
-    return config_error;
+// 默认配置
+server_config_t *config_create_default() {
+    server_config_t *config = (server_config_t*)malloc(sizeof(server_config_t));
+    if (!config) {
+        return NULL;
+    }
+
+    // 清空
+    memset(config, 0, sizeof(server_config_t));
+
+    // 设置默认值
+    strcpy(config->server_ip, "0.0.0.0");
+    config->server_port = 8080;
+    config->thread_pool_size = 10;
+    config->max_connections = 100;
+    config->request_timeout = 30;
+    strcpy(config->data_directory, "./data");
+    config->max_file_size = 100;    // 100MB
+    config->enable_logging = true;
+    strcpy(config->log_file, "./logs/server.log");
+    config->buffer_size = 64;       // 64KB
+
+    return config;
 }
 
 // 去除首尾空白
@@ -36,29 +56,34 @@ static char *trim(char *str) {
 }
 
 // 加载配置文件
-int load_config(const char *config_file, ServerConfig *config) {
+config_error_t config_load_from_file(const char *filename, server_config_t **config_ptr) {
+    if (!filename || !config_ptr) {
+        return CONFIG_PARSE_ERROR;
+    }
+
+    // 检查文件是否存在
+    if (access(filename, F_OK) != 0) {
+        return CONFIG_FILE_NOT_FOUND;
+    }
+
     // 打开文件
-    FILE *file = fopen(config_file, "r");
+    FILE *file = fopen(filename, "r");
     if (!file) {
-        /* fprintf(stderr, "Error: cannot open config file: %s\n", config_file); */
-        snprintf(config_error, sizeof(config_error), "Cannot open config file: %s, error: %s", config_file, strerror(errno));
-        return -1;
+        return CONFIG_FILE_NOT_FOUND;
+    }
+
+    // 创建默认配置作为基础
+    server_config_t *config = config_create_default();
+    if (!config) {
+        fclose(file);
+        return CONFIG_MEMORY_ERROR;
     }
 
     // 解析每一行
-    char line[MAX_CONFIG_LINE];
-    int line_num = 0;
+    char line[256];
 
-    // 设置默认值
-    strncpy(config->ip, "127.0.0.1", sizeof(config->ip));
-    config->port = 8080;
-    config->thread_num = 10;
-    strncpy(config->file_dir, "./server_files", sizeof(config->file_dir));
-    config->max_connections = 100;
-    config->timeout = 300;
 
     while (fgets(line, sizeof(line), file)) {
-        line_num++;
         char *trimmed_line = trim(line);
         
         // 跳过空行和注释
@@ -76,125 +101,170 @@ int load_config(const char *config_file, ServerConfig *config) {
         char *key = trim(trimmed_line);
         char *value = trim(equals + 1);
 
-        if (strcmp(key, "IP") == 0) {
-            strncpy(config->ip, value, sizeof(config->ip) - 1);
-        } else if (strcmp(key, "PORT") == 0) {
-            config->port = atoi(value);
-        } else if (strcmp(key, "THREAD_NUM") == 0) {
-            config->thread_num = atoi(value);
-        } else if (strcmp(key, "FILE_DIR") == 0) {
-            strncpy(config->file_dir, value, sizeof(config->file_dir) - 1);
-        } else if (strcmp(key, "MAX_CONNECTIONS") == 0) {
+        if (strcmp(key, "server_ip") == 0) {
+            strncpy(config->server_ip, value, sizeof(config->server_ip) - 1);
+        } 
+        else if (strcmp(key, "server_port") == 0) {
+            config->server_port = atoi(value);
+        } 
+        else if (strcmp(key, "thread_pool_size") == 0) {
+            config->thread_pool_size = atoi(value);
+        } 
+        else if (strcmp(key, "data_dicectory") == 0) {
+            strncpy(config->data_directory, value, sizeof(config->data_directory) - 1);
+        } 
+        else if (strcmp(key, "max_connections") == 0) {
             config->max_connections = atoi(value);
-        } else if (strcmp(key, "TIMEOUT") == 0) {
-            config->timeout = atoi(value);
+        } 
+        else if (strcmp(key, "request_timeout") == 0) {
+            config->request_timeout = atoi(value);
+        }
+        else if (strcmp(key, "max_file_size") == 0) {
+            config->max_file_size = atoi(value);
+        }
+        else if (strcmp(key, "buffer_size") == 0) {
+            config->buffer_size = atoi(value);
+        }
+        else if (strcmp(key, "enable_logging") == 0) {
+            // true/1/yes为true，否则为false
+            if (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0 || strcasecmp(value, "yes") == 0) {
+                config->enable_logging = true;
+            } else {
+                config->enable_logging = false;
+            }
+        }
+        else if (strcmp(key, "log_file") == 0) {
+            strncpy(config->log_file, value, sizeof(config->log_file) - 1);
         }
     }
 
     fclose(file);
-    return 0;
-}
 
-// 重新加载配置（保留部分状态）
-int reload_config(const char *config_file, ServerConfig *config) {
-    ServerConfig new_config;
-    
-    if (load_config(config_file, &new_config) != 0) {
-        return -1;
+    // 验证配置信息
+    config_error_t validation_result = config_validate(config);
+    if (validation_result != CONFIG_SUCCESS) {
+        free(config);
+        return validation_result;
     }
 
-    if (validate_config(&new_config) != 0) {
-        return -1;
-    }
-
-    // 更新配置
-    *config = new_config;
-    return 0;
+    *config_ptr = config;
+    return CONFIG_SUCCESS;
 }
 
 
-void print_config(const ServerConfig *config) {
-    printf("===Server Configuration===\n");
-    printf("IP: %s\n", config->ip);
-    printf("Port: %d\n", config->port);
-    printf("Thread: %d\n", config->thread_num);
-    printf("File Directory: %s\n", config->file_dir);
+void config_print(const server_config_t *config) {
+    if (!config) {
+        printf("Configuration is NULL\n");
+        return;
+    }
+
+    printf("=== Server Configuration ===\n");
+    printf("Server IP: %s\n", config->server_ip);
+    printf("Server Port: %d\n", config->server_port);
+    printf("Thread Pool Size: %d\n", config->thread_pool_size);
     printf("Max Connections: %d\n", config->max_connections);
-    printf("Timeout: %d seconds\n", config->timeout);
-    printf("==========================\n");
+    printf("Request Timeout: %d seconds\n", config->request_timeout);
+    printf("Data Directory: %s\n", config->data_directory);
+    printf("Max File Size: %d MB\n", config->max_file_size);
+    printf("Buffer Size: %d KB\n", config->buffer_size);
+    printf("Logging Enabled: %s\n", config->enable_logging ? "Yes" : "No");
+    printf("Log File: %s\n", config->log_file);
+    printf("============================\n");
 }
 
 // 验证配置的合理性
-int validate_config(const ServerConfig *config) {
-    if (strlen(config->ip) == 0) {
-        /* fprintf(stderr, "Error: IP address cannot be empty\n"); */
-        snprintf(config_error, sizeof(config_error), "IP address cannot be empty");
-        return -1;
+config_error_t config_validate(const server_config_t *config) {
+    if (!config) {
+        return CONFIG_VALIDATION_ERROR;
     }
 
-    // 简单的ip验证
-    int dots = 0;
-    for (const char *p = config->ip; *p; p++) {
-        if (*p == '.') {
-            dots++;
-        }
-        else if (*p < '0' || *p > '9') {
-            snprintf(config_error, sizeof(config_error), "Invaild IP address format");
-            return -1;
-        }
+    // 验证IP地址格式
+    if (strlen(config->server_ip) == 0) {
+        return CONFIG_VALIDATION_ERROR;
     }
 
-    if (dots != 3) {
-        snprintf(config_error, sizeof(config_error), "Invaild IP address format");
-        return -1;
-    }
-
-
-    if (config->port < 1024 || config->port > 65535) {
-        snprintf(config_error, sizeof(config_error), "Port must be between 1024 and 65535, got %d", config->port);
-        return -1;
+    // 验证端口范围
+    if (config->server_port < 1024 || config->server_port > 65535) {
+        return CONFIG_VALIDATION_ERROR;
     }
 
     // 验证线程数量
-    if (config->thread_num < 1 || config->thread_num > 100) {
-        snprintf(config_error, sizeof(config_error), "Thread num must be between 1 and 100, got %d",config->thread_num);
-        return -1;
+    if (config->thread_pool_size < 1 || config->thread_pool_size > 100) {
+        return CONFIG_VALIDATION_ERROR;
     }
 
     // 验证最大连接数
-    if (config->max_connections <= 0 || config->max_connections > 10000) {
-        snprintf(config_error, sizeof(config_error),
-                "Max connections must be between 1 and 10000, got %d", config->max_connections);
-        return -1;
+    if (config->max_connections < 1 || config->max_connections > 10000) {
+        return CONFIG_VALIDATION_ERROR;
     }
 
     // 验证超时时间
-    if (config->timeout <= 0) {
-        snprintf(config_error, sizeof(config_error),
-                "Timeout must be positive, got %d", config->timeout);
-        return -1;
+    if (config->request_timeout < 1 || config->request_timeout > 300) {
+        return CONFIG_VALIDATION_ERROR;
     }
 
-    if (strlen(config->file_dir) == 0) {
-        fprintf(stderr, "Error: File directory cannot be empty\n");
-        return -1;
+    // 验证数据目录
+    if (strlen(config->data_directory) == 0) {
+        return CONFIG_VALIDATION_ERROR;
     }
 
+    // 如果数据目录不存在，创建一个
     struct stat st;
-    if (stat(config->file_dir, &st) == -1) {
-        if (mkdir(config->file_dir, 0775) == -1) {
-            snprintf(config_error, sizeof(config_error),
-                    "Cannot create directory: %s, error: %s", config->file_dir, strerror(errno));
-            return -1;
+    if (stat(config->data_directory, &st) == -1) {
+        if (mkdir(config->data_directory, 0775) == -1) {
+            return CONFIG_MEMORY_ERROR;
         }
 
-        printf("Create directory: %s\n", config->file_dir);
+        printf("Create directory: %s\n", config->data_directory);
     } else if (!S_ISDIR(st.st_mode)) {
-        snprintf(config_error, sizeof(config_error), 
-                 "File directory path exists but is not a directory: %s", config->file_dir);
-        return -1;
+        return CONFIG_VALIDATION_ERROR;
     }
 
-    config_error[0] = '\0';     // 清空
-    return 0;
+    // 验证文件大小
+    if (config->max_file_size < 1 || config->max_file_size > 1024) {
+        return CONFIG_VALIDATION_ERROR;
+    }
+
+    // 验证缓冲区大小
+    if (config->buffer_size < 1 || config->buffer_size > 1024) {
+        return CONFIG_VALIDATION_ERROR;
+    }
+
+    return CONFIG_SUCCESS;
+}
+
+
+void config_destroy(server_config_t *config) {
+    if (config) {
+        free(config);
+    }
+}
+
+
+const char *config_get_error_string(config_error_t error) {
+    switch(error) {
+    case CONFIG_SUCCESS:
+        return "Success";
+    case CONFIG_FILE_NOT_FOUND:
+        return "Configuration file not found";
+    case CONFIG_PARSE_ERROR:
+        return "Error parsing configuration file";
+    case CONFIG_VALIDATION_ERROR:
+        return "Configuration validation failed";
+    case CONFIG_MEMORY_ERROR:
+        return "Memory allocation error";
+    default:
+        return "Unknown error";
+    }
+}
+
+
+const char *config_get_data_directory(const server_config_t *config) {
+    return config ? config->data_directory : "./data";
+}
+int config_get_thread_pool_size(const server_config_t *config) {
+    return config ? config->thread_pool_size : 10;
+}
+int config_get_max_connections(const server_config_t *config) {
+    return config ? config->max_connections : 100;
 }
