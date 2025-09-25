@@ -6,14 +6,22 @@
 #include <time.h>
 #include "../include/config.h"
 #include "../include/threadpool.h"
+#include "../include/network.h"
 
 // 全局变量
 static server_config_t *g_config = NULL;
 static threadpool_t *g_thread_pool = NULL;
+static network_server_t *g_network_server = NULL;
 
 // 信号处理
 void signal_handler(int sig) {
     printf("\nReceive signal %d, shutting down...\n", sig);
+
+    if (g_network_server) {
+        network_server_stop(g_network_server);
+        network_server_destroy(g_network_server);
+        g_network_server = NULL;
+    }
 
     if (g_thread_pool) {
         threadpool_destroy(g_thread_pool, 1);   // 优雅关闭
@@ -67,25 +75,31 @@ int main(int argc, char **argv) {
 
     printf("Thread pool created with %d threads\n", config_get_thread_pool_size(g_config));
 
-
-    // 示例：添加一些任务到线程池
-    for (int i = 0; i < 5; i++) {
-        int *task_id = (int*)malloc(sizeof(int));
-        *task_id = i;
-
-        if (threadpool_add(g_thread_pool, sample_task, task_id) != THREADPOOL_SUCCESS) {
-            free(task_id);
-            fprintf(stderr, "Failed to add task %d to thread pool\n", i);
-        }
+    // 创建网络服务器
+    g_network_server = network_server_create(g_config, g_thread_pool);
+    if (!g_network_server) {
+        fprintf(stderr, "Failed to create network server\n");
+        threadpool_destroy(g_thread_pool, 0);
+        config_destroy(g_config);
+        return 1;
     }
 
-    printf("Server is running. Press Ctrl+C to stop.\n");
+    printf("Network server created!\n");
 
-    // 主循环（简化版）
-    while (1) {
-        /* sleep(1); */
-        // 即将添加网络监听模块
+    // 启动网络服务器   (会阻塞)
+    network_error_t network_result = network_server_start(g_network_server);
+    if (network_result != NETWORK_SUCCESS) {
+        fprintf(stderr, "Failed to start network server: %s\n", network_get_error_string(network_result));
+        network_server_destroy(g_network_server);
+        threadpool_destroy(g_thread_pool, 0);
+        config_destroy(g_config);
+        return 1;
     }
+
+    // 清理资源（正常情况下不会运行到这里
+    network_server_destroy(g_network_server);
+    threadpool_destroy(g_thread_pool, 0);
+    config_destroy(g_config);
 
     return 0;
 }
