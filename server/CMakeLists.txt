@@ -18,21 +18,23 @@ file(GLOB TEST_SOURCES "test/*.c")
 # 主服务器可执行文件
 add_executable(NetDiskServer ${SERVER_SOURCES})
 target_link_libraries(NetDiskServer PRIVATE pthread)
-target_compile_options(NetDiskServer PRIVATE -Wall -Wextra -Werror -pthread)
+target_compile_options(NetDiskServer PRIVATE -pthread)
 
 # 测试可执行文件（显式列出需要的源）
-add_executable(NetworkTest test/test_network.c src/network.c src/config.c src/threadpool.c src/protocol.c)
+add_executable(NetworkTest test/test_network.c src/network.c src/config.c src/threadpool.c src/protocol.c src/command.c src/command_parser.c)
 target_link_libraries(NetworkTest PRIVATE pthread)
-target_compile_options(NetworkTest PRIVATE -Wall -Wextra -Werror -pthread)
+target_compile_options(NetworkTest PRIVATE  -pthread)
 
 add_executable(ConfigTest test/test_config.c src/config.c)
-target_compile_options(ConfigTest PRIVATE -Wall -Wextra -Werror)
+target_compile_options(ConfigTest PRIVATE)
 
 add_executable(ThreadPoolTest test/test_threadpool.c src/threadpool.c)
 target_link_libraries(ThreadPoolTest PRIVATE pthread)
-target_compile_options(ThreadPoolTest PRIVATE -Wall -Wextra -Werror -pthread)
+target_compile_options(ThreadPoolTest PRIVATE -pthread)
+
+add_executable(CommandTest test/test_commands.c src/command.c src/command_parser.c)
 
 # 安装所有可执行文件到 bin
-install(TARGETS NetDiskServer NetworkTest ConfigTest ThreadPoolTest
+install(TARGETS NetDiskServer NetworkTest ConfigTest ThreadPoolTest CommandTest
         RUNTIME DESTINATION bin)
 

@@ -12,6 +12,8 @@
 #include "../include/network.h"
 #include "../include/protocol.h"
 #include "../include/threadpool.h"
+#include "../include/command.h"
+#include "../include/command_parser.h"
 
 #define MAX_EVENTS 64
 #define BUFFER_SIZE 4096
@@ -96,13 +98,34 @@ static void handle_client_connection(network_server_t *server, client_connection
         // 更新最后活动时间
         client->last_activity = time(NULL);
 
-        // 这里将添加协议解析和处理逻辑
-        printf("Receive %zd bytes from client %d\n", bytes_received, client->client_id);
+        // 解析和执行命令
+        parser_command_t* cmd = command_parser(buffer, bytes_received);
+        if (cmd) {
+            // 创建命令上下文（简化版）
+            command_context_t* context = command_context_create(client->client_id, server->config->data_directory);
+            if (context) {
+                // 执行命令
+                command_result_t* cmd_result = command_execute(context, cmd);
 
-        // 简单回声测试
-        char response[256];
-        snprintf(response, sizeof(response), "Echo: %.*s", (int)bytes_received, buffer);
-        client_connection_send(client, response, strlen(response));
+                if (cmd_result) {
+                    // 发送命令结果
+                    if (cmd_result->message) {
+                        network_send_data(client->client_id, cmd_result->message, strlen(cmd_result->message));
+                    } 
+
+                    // 如果有数据，也发送
+                    if (cmd_result->data && cmd_result->data_size > 0) {
+                        network_send_data(client->client_id, cmd_result->data, cmd_result->data_size);
+                    }
+
+                    command_result_destroy(cmd_result);
+                }
+
+                command_context_destroy(context);
+            }
+
+            command_free(cmd);
+        }
     }
     else if (result == NETWORK_CONNECTION_CLOSED) {
         printf("Client %d disconnected\n", client->client_id);
